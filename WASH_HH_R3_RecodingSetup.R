@@ -1,6 +1,5 @@
 #ZACK ARNO 
-#WASH HH ROUND 3 - 2019
-
+#
 
 library(survey)
 library(rlang)
@@ -173,8 +172,8 @@ CZHH<-cz %>%
             
             ) 
 
-czHH$ic.wat_drink_plus_both_none_drnk
-czHH %>% View()
+
+
 #HH DATA
 ########################################
 
@@ -257,26 +256,7 @@ reasons_no_aqua<- c("aqua_tab_trt.dnt_know", "aqua_tab_trt.dntknw_use_aquatab",
 # COULD RUN THESE TOGETHER IN TEH CUSTOM MEAN_PROP_SURVEY FUNCTION
 easy_wat<-c("time_wat","trt_wat", "sec_sourc_wat",
             "time_coll_wat","wat_store","drnk_wat_7days","sat_wat", "drink_wat","cont_clean")
-# JUST LOOKING AT SOME VARIABLES
-hz$time_wat# break down by option
-hz$trt_wat # break down prop
-hzsec_sourc_wat #breakdown prop
-hz$time_coll_wat# break down by option
-hz$wat_store
-hz$drnk_wat_7days
-hz$sat_wat
-hz$drink_wat
 
-
-hz %>% select(starts_with("soap_yest_when.")) %>% colnames() %>% dput()
-hz %>% select(starts_with("wash_hands.")) %>% colnames() %>% dput()
-###########################################
-#REPLACE NA WITH 0
-hz %>% select(starts_with("challengeS.")) %>% colnames() %>% dput()
-hz %>% select(starts_with("train_type.")) %>% colnames() %>% dput()
-hz %>% select(starts_with("more_train.")) %>% colnames() %>% dput()
-hz %>% select(starts_with("more_train.")) %>% colnames() %>% dput()
-hz %>% select(starts_with("consult_opinon.")) %>% colnames() %>% dput()
 
 safe_water_sources<-c("pip", "tube", "wat_tnk", "pwell",  "tnktr", 
                       "psprng",  "bwat")
@@ -327,7 +307,6 @@ disab_recoded_cols<-c("indi_disab_see.recoded", "indi_disab_hear.recoded", "indi
                       "indi_disab_remem.recoded", "indi_disab_wash.recoded", "indi_disab_comm.recoded")
 iz3<-data.frame(iz2,disab_recoded)
 
-hz2$drink_wat %>% unique() %>% dput()
 
 #DO SOME COMPOSITE INDICATORS AT THE INDIVIDUAL LEVEL
 
@@ -369,41 +348,10 @@ iz4<-iz3 %>%
 
 
 #FOR THESE SELECT MULTIPLE WE WANT % BREAK DOWN  BY GENDER &  O.age_group2 O.age_group1 AT THE INDIVIDUAL LEVEL
-collection_problems<-iz4 %>% select(starts_with("indi_wat_prb.")) %>% colnames() %>% dput()
+collection_problems<-iz4 %>% select(starts_with("indi_wat_prb.")) %>% colnames()
 
-nh$drnk_wat_7days
-iz4$indi_wat_prb.source_dangerous
-iz4$I.disab_tr
-iz4$Is.gender_hohA
-iz4$I.prob_coll_water_INDI
-hs$variables$drnk_wat_7days
 
 ######################INDIVIDUAL LEVEL##########################
-###### NA MEANS NOT APPLICABLE
-#BREAK DOWN BY 2 AGE GROUPS AND GENDER
-#JUST LOOKING AT AND GROUPING SOME INDICATORS
-"indi_def_where" # indi_def_where by both age groups & Gender
-
-"indi_def_prob"# NA IS NA --- broke down by both age groups and gender
-
-iz4 %>%  select(starts_with("indi_def_typ.")) %>% colnames()
-c("indi_def_typ.lat_insuffient_wat", "indi_def_typ.lat_opn_defecation_lat", 
-  "indi_def_typ.lat_not_clean", "indi_def_typ.lat_prb_other", "indi_def_typ.lat_bad_smell", 
-  "indi_def_typ.lat_no_lighting", "indi_def_typ.lat_full", "indi_def_typ.lat_many_people", 
-  "indi_def_typ.lat_path_latrine_unsafe", "indi_def_typ.lat_far", 
-  "indi_def_typ.lat_no_separation", "indi_def_typ.lat_not_private", 
-  "indi_def_typ.lat_fac_unsafe")
-
-"indi_def_unsafe"
-"indi_diff_toilet"
-"indi_dia_per"
-"indi_bathe_normally"
-iz4 %>% select(starts_with("indi_dia_measures.")) %>% colnames() %>% dput()
-"indi_bath_prob"
-
-iz4 %>% select(starts_with("indi_bath_prob_ty.")) %>% colnames() %>% dput()
-"indi_bath_unsafe"
-
 
 
 cols_for_big_brk_down<-c("indi_def_where","indi_def_prob",
@@ -489,7 +437,7 @@ I.def_type<-iz4 %>% select(parent_instance_name,indi_gen,X_index, starts_with("i
   group_by(parent_instance_name) %>% 
   summarise_at(c(paste0("female.",def_cols,"_INDHH"),paste0("male.",def_cols,"_INDHH"),paste0(def_cols,"_INDHH")), function(x)ifelse(sum(x,na.rm=TRUE)>0,1,0))
 
-select(iz4, starts_with("indi_dia_measures.")) %>% colnames() %>% dput()
+
 deftype_dia_measures_INDIVHH<-iz4 %>% select(parent_instance_name, starts_with("indi_def_typ."), starts_with("indi_dia_measures.")) %>% 
   group_by(parent_instance_name) %>% 
   summarise_all(function(x) ifelse(sum(x,na.rm=TRUE)>0,1,0)) 
@@ -497,7 +445,7 @@ colnames(deftype_dia_measures_INDIVHH)[2:ncol(deftype_dia_measures_INDIVHH)]<-pa
 
 
 
-bath_prob_cols<-iz4 %>% select(starts_with("indi_bath_prob_ty.")) %>% colnames
+bath_prob_cols<-iz4 %>% select(starts_with("indi_bath_prob_ty.")) %>% colnames()
 
 I.bath_prob_type<-iz4 %>% select(parent_instance_name,indi_gen,X_index, bath_prob_cols) %>% 
   mutate_at(bath_prob_cols, function(x) ifelse((x==1 & .$indi_gen=="female"),1,0)) %>% 
@@ -517,14 +465,10 @@ dl<-list(iz_to_HH,I.def_type, deftype_dia_measures_INDIVHH,I.bath_prob_type)
 
 #QUESTION FOR MARTIN
 #WHY DOES THIS FUNCTION NOT WORK/REQUIRE SO MUCH MEMORY WHEN I INCLUDE THE FULLL HH DATA
-start_time<-Sys.time()
 new_indis<-Reduce(function(x, y) merge(x, y, all=TRUE), dl)
-end_time<-Sys.time()
-end_time-start_time
-new_indis
 #COMBNIE WITH HH DATA
 nh<-left_join(hz2, new_indis, by= c("instance_name"="parent_instance_name"))
-nh<-left_join(nh,czHH,by= c("X_index"="X_parent_index"))
+nh<-left_join(nh,CZHH,by= c("X_index"="X_parent_index"))
 # czHH$ic.wat_drink_plus_both_none_drnk
 nh<-nh %>% 
   mutate(
@@ -549,5 +493,6 @@ nh<-nh %>%
     ic.jrp.drnk_nondrnk_both_gr_threshold_15L=(ic.jrp.drnk_nondrnk_both_lpppd>=15) %>% as.numeric(),
     ic.jrp.drnk_nondrnk_both_gr_threshold_3L=(ic.jrp.drnk_nondrnk_both_lpppd>=3) %>% as.numeric()
   )  
+# write.csv(nh, "inputs/01_HH_WASH_HH_R3_Data_With_Recoded_Indicators_19july2019.csv")
 
-
+# write.csv(iz4, "inputs/01_INDIV_WASH_HH_R3_Data_With_Recoded_Indicators_19july2019.csv")
