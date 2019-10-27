@@ -36,4 +36,10 @@ vignettes/*.pdf
 rsconnect/
 
 #IGNORE INPUT DATA FOLDER
-/inputs/*
+
+!/inputs/
+/inputs/**
+!/inputs/questionnaire/
+/scrap/*
+/daps/*
+/output/WASH_HH_R3/*
