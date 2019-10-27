@@ -1,0 +1,269 @@
+---
+title: "WASH R3 Hypothesis Testing"
+author: "Zack Arno"
+date: "2019 M07 14"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+---
+```{r setup, include=FALSE}
+library(survey)
+library(rlang)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(hypegrammaR)
+library(koboquest)
+source("functions/wash_container_volume_bgd_2019.R")
+source("functions/wash_hh_r3_2019_recoding.R")
+source("functions/mean_prop_survey_july2019.R")
+
+hh<- read.csv(file = "inputs/Header_07july2019.csv", stringsAsFactors = FALSE, na.strings=c(""," ", "<NA>",NA))
+ind <- read.csv("inputs/Individual_19June2019.csv", stringsAsFactors = FALSE, na.strings=c(""," ", "<NA>",NA))
+cont<- read.csv("inputs/Container_19June2019.csv", stringsAsFactors = FALSE, na.strings=c(""," ", "<NA>",NA))
+survey<- read.csv("inputs/Survey.csv")
+choices<-read.csv("inputs/Choices.csv")
+
+
+
+#FOR SOME REASON THERE WERE DUPLICATES- GET RID
+hh<-hh[!duplicated(hh$instance_name),]
+ind<-ind[!duplicated(ind$repeat_instance_name),]
+
+#ADD COMPOSITE/AGGREGATE VARIABLES TO INDIVIDUAL AND HH DATA SET
+individual_and_hh_data<-wash_hh_r3_2019_recoding(container_data = cont, individual_data = ind, hh_data = hh)
+
+
+#SEPARATE DATASETS INTO TWO OBJECTS
+household_data<-individual_and_hh_data$HH_dataset
+individual_data<-individual_and_hh_data$individual_dataset
+individual_data<- individual_data %>% 
+  left_join(household_data %>% select(X_uuid,camp_id ), by=c("X_submission_uuid"="X_uuid"))
+
+household_data$camp_id
+#USE KOBOQUEST TO GET QUESTIONNAIRES- WILL USE LATER
+hh_survey<-koboquest::load_questionnaire(data = household_data,questions = survey, choices = choices,choices.label.column.to.use = "label")
+ind_survey<-koboquest::load_questionnaire(data = individual_data,questions = survey, choices = choices,choices.label.column.to.use = "label")
+
+
+#LOAD POPULATION DATA AND EXTRACT RELEVANT COLUMNS
+pop_dir<-"WASH_unhcr_population_and_assessment_sample_size_data.csv"
+pop<-read.csv(pop_dir, stringsAsFactors = FALSE, na.strings=c("NA", "", " "))
+pop<-pop %>% select(camp_id, total_HH)
+
+#GET HH WEIGHTS
+wash_weights<-map_to_weighting(sampling.frame = pop, data.stratum.column = "camp_id",
+                               data = household_data,
+                               sampling.frame.population.column ="total_HH",
+                               sampling.frame.stratum.column = "camp_id"
+)
+
+#SETUP HH SURVEY DESIGN OBJECTS
+hh_svy_ob<-map_to_design(data=household_data,weighting_function = wash_weights)
+
+#STEAL HH WEIGHTS FOR INDIVIDUAL WEIGHTS
+individual_data_with_weights<-household_data %>% 
+  mutate(weights= weights(hh_svy_ob)) %>% 
+  select(instance_name,camp_id, Upazila, resp_gen, weights) %>% 
+  right_join(individual_data, by= c("instance_name"="parent_instance_name"))
+
+#MAKE INDIVIDUAL/REPEAT SURVEY OBJECT
+ind_svy_ob<-svydesign(ids = ~ 1,
+                strata =  ~ camp_id,
+                weights= ~weights,
+                data = individual_data_with_weights)
+
+#CONVERT CHARACTER VARIABLES TO FACTOR FOR BOTH INDIVIDUAL AND HH DATA
+ind_svy_ob$variables<-ind_svy_ob$variables %>% 
+  mutate_if(sapply(ind_svy_ob$variables, is.character),as.factor)
+
+
+hh_svy_ob$variables<-hh_svy_ob$variables %>% 
+  mutate_if(sapply(hh_svy_ob$variables, is.character),as.factor)
+
+```
+
+
+
+```{r}
+individual_data$IS.disabA
+individual_data$disab
+individual_data$I.prob_coll_water_INDI
+individual_data$indi_collect_wat
+individual_data$I.coll_water_always_often
+
+
+case<-map_to_case(hypothesis.type = "group_difference",
+                  dependent.var.type = "categorical", 
+                  independent.var.type = "categorical")
+
+
+weighting_function<-function(df){df$variables$weights}
+ind_weight_function<-weighting_function(individual_data_with_weights)
+results1<-map_to_result(data=ind_coll_water_always_often_data,
+                            dependent.var="I.prob_coll_water_INDI",
+                            independent.var = "IS.disabA", 
+                            case=case, 
+                            weighting =ind_weights(individual_data_with_weights) )
+
+ind_coll_water_always_often_data<-ind_svy_ob %>% subset(I.coll_water_always_often==1)
+ind_coll_water_always_often_data$variables$camp_id
+
+RT_water_disab<-svychisq(~I.prob_coll_water_INDI+IS.disabA,ind_coll_water_always_often_data)
+svytable(~I.prob_coll_water_INDI+IS.disabA,ind_coll_water_always_often_data)
+
+RT_water_disab$expected
+RT_water_disab$observed
+RT_water_disab$parameter
+
+ind_weights<-function(df){df$weights}
+
+
+
+```
+
+# Hypothesis Testing
+
+###Batch 1:  Categorical Vs Categorical (ISCG and Dependent) - CHISQ
+
+In this first analyses we examine 5 categorical variables agains all categorical ISCG variables using the Chi-Squared Test for Independence. When a "significant relationship" (p<0.05) is found a table for further investigation is produced.
+
+```{r results="asis", fig.align= "center"}
+iscg_cols_categorical<-c("IS.REVA_arrival", "IS.REVA_arrival_shelt", "Is.higest_edu", 
+  "IS.mhoh", "IS.gender_hoh", "IS.dependency_ratio_threshold", "IS.disab", 
+  "IS.disab_coll_water", "IS.no_male_18to59_coll_water", "IS.no_adult_18to59_coll_water")
+
+dependent.var.list<-c("I.prob_coll_water_HH",
+  "I.safe_water_sources",
+  "I.wat_30min",
+  "ic.jrp.drnk_wat_only_classification",
+  "I.cop_strat")
+
+
+#MATCHING CATEGORICAL VS CATEGORICAL
+case<-map_to_case(hypothesis.type = "group_difference",
+                  dependent.var.type = "categorical", 
+                  independent.var.type = "categorical")
+household_data$I.prob_coll_water_HH
+
+
+
+results_list<-list()
+for (dep_var in dependent.var.list){
+
+  for(iscg_var in iscg_cols_categorical){
+
+    results1<-map_to_result(data=hh,
+                            dependent.var=dep_var,
+                            independent.var = iscg_var, 
+                            case=case, 
+                            weighting = wash_weights)
+    
+    pval<-round(results1$hypothesis.test$result$p.value,3)
+    pval_label<-ifelse(pval<0.05, paste0("*", pval),pval)
+    results_list[[iscg_var]]<-results1$summary.statistic
+    plots1<-ggplot(results1$summary.statistic,
+                   aes(x=independent.var.value, 
+                       y=numbers, 
+                       fill=factor(dependent.var.value),name="")) + 
+      geom_bar(position=position_dodge(), stat="identity") +
+      scale_fill_brewer(palette="Spectral")+
+      geom_errorbar(aes(ymin=min, ymax=max),
+                    width=.2,                    
+                    position=position_dodge(.9))+
+      labs(title= paste0(dep_var, "~",iscg_var," p value = " ,pval_label),
+           x=iscg_var,y= "%",
+           fill=dep_var)+
+      # geom_text(aes(label=numbers), vjust=max(max)) +
+      geom_text(aes(y=max(max)+0.2,label=round(numbers,3)),
+                # width=.2,                    
+                position=position_dodge(.9))+
+      theme_economist()
+    print(plots1)
+    if(pval<0.05){
+      print(kable(results1$summary.statistic,
+                  caption= paste0("Sig. Relationship Found for ",
+                                  paste0(iscg_var,dep_var)," : pval= *", pval)) %>% kable_styling(position = "center"))}
+  }
+  
+}
+```
+
+###Batch 2:  Categorical Vs Categorical (ISCG and Dependent) - CHISQ
+instuctions:
+All of the below tested as follows:
+Relationship test for all ISCG indicators
+Relationship test for HHs with at least 1 PWD 
+
+Relationship test for HHs where: at least 1 PWD collects water / no males 18-59 collect water / no adults 18-59 collect wate
+
+
+```{r results="asis", eval =TRUE , fig.align= "center"}
+dependent.var.list<-c( "I.aquatab_pursach", 
+   "I.indi_def_prob_yes",
+   "I.indi_bath_prob_all_INDIVHH",
+   "menst_chell",
+   "I.menst_access_satisf",
+   "I.hnd_sp",
+   "hyg_train",
+   "I.consulted_account_latrine")
+
+length(dependent.var.list)*length(iscg_cols_categorical)
+results_list<-list()
+for (dep_var in dependent.var.list){
+
+  for(iscg_var in iscg_cols_categorical){
+
+    results1<-map_to_result(data=hh,
+                            dependent.var=dep_var,
+                            independent.var = iscg_var, 
+                            case=case, 
+                            weighting = wash_weights)
+    
+    pval<-round(results1$hypothesis.test$result$p.value,3)
+    pval_label<-ifelse(pval<0.05, paste0("*", pval),pval)
+    results_list[[iscg_var]]<-results1$summary.statistic
+    plots1<-ggplot(results1$summary.statistic,
+                   aes(x=independent.var.value, 
+                       y=numbers, 
+                       fill=factor(dependent.var.value),name="")) + 
+      geom_bar(position=position_dodge(), stat="identity") +
+      scale_fill_brewer(palette="Spectral")+
+      geom_errorbar(aes(ymin=min, ymax=max),
+                    width=.2,                    
+                    position=position_dodge(.9))+
+      labs(title= paste0(dep_var, "~",iscg_var," p value = " ,pval_label),
+           x=iscg_var,y= "%",
+           fill=dep_var)+
+      # geom_text(aes(label=numbers), vjust=max(max)) +
+      geom_text(aes(y=max(max)+0.2,label=round(numbers,3)),
+                # width=.2,                    
+                position=position_dodge(.9))+
+      theme_economist()
+    print(plots1)
+    if(pval<0.05){
+      print(kable(results1$summary.statistic,
+                  caption= paste0("Sig. Relationship Found for ",
+                                  paste0(iscg_var,dep_var)," : pval= *", pval)) %>% kable_styling(position = "center"))}
+  }
+  
+}
+
+
+
+
+
+```  
+###Disaggregation by respondent status
+
+
+
+```{r results="asis", eval =FALSE , fig.align= "center"}
+results1$message
+
+# Plotting the residuals
+corrplot(chisq$residuals, is.cor = FALSE)
+
+```  
+  
